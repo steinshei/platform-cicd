@@ -1,0 +1,86 @@
+name: reusable-promote
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+      image_tag:
+        required: true
+        type: string
+      staging_values_file:
+        required: true
+        type: string
+      prod_values_file:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update staging
+        run: |
+          set -euo pipefail
+          sed -i.bak -E "s|^  tag: .*|  tag: ${{ inputs.image_tag }}|" "${{ inputs.staging_values_file }}"
+          rm -f "${{ inputs.staging_values_file }}.bak"
+
+      - name: Commit staging
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${{ inputs.staging_values_file }}"
+          git commit -m "promote(staging): ${{ inputs.service }} ${{ inputs.image_tag }}"
+          git push
+
+  promote-prod:
+    runs-on: ubuntu-latest
+    needs: [promote-staging]
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Policy gate (staging -> prod only)
+        run: |
+          set -euo pipefail
+          STAGING_TAG="$(awk '/^  tag:/ {print $2}' "${{ inputs.staging_values_file }}")"
+          if [ "$STAGING_TAG" != "${{ inputs.image_tag }}" ]; then
+            echo "Promotion denied: requested tag must already exist in staging"
+            exit 1
+          fi
+
+      - name: Update prod
+        run: |
+          set -euo pipefail
+          sed -i.bak -E "s|^  tag: .*|  tag: ${{ inputs.image_tag }}|" "${{ inputs.prod_values_file }}"
+          rm -f "${{ inputs.prod_values_file }}.bak"
+
+      - name: Create prod promotion PR (manual merge required)
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "promote(prod): ${{ inputs.service }} ${{ inputs.image_tag }}"
+          branch: "promote/prod-${{ inputs.service }}-${{ github.run_id }}"
+          delete-branch: true
+          title: "promote(prod): ${{ inputs.service }} ${{ inputs.image_tag }}"
+          body: |
+            Automated prod promotion PR.
+            - service: `${{ inputs.service }}`
+            - image_tag: `${{ inputs.image_tag }}`
+            - source_run: `${{ github.run_id }}`
+
+            Manual review and merge are required for production.
+          labels: |
+            prod
+            manual-approval-required
+          add-paths: |
+            ${{ inputs.prod_values_file }}

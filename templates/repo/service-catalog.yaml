@@ -1,0 +1,8 @@
+service: sample-service
+owner: team-platform
+system: platform
+business_criticality: medium
+tier: 2
+slo:
+  availability: 99.9%
+runbook: docs/runbook.md

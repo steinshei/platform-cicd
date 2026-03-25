@@ -1,0 +1,13 @@
+name: security-sast
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  security:
+    uses: steinshei/platform-cicd/.github/workflows/reusable-security-sast.yml@v1
+    with:
+      run_semgrep: true
