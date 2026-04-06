@@ -44,4 +44,5 @@ jobs:
       - name: Semgrep scan
         uses: semgrep/semgrep-action@v1
         with:
+          image: semgrep/semgrep:1.76.0
           config: p/default
