@@ -1,0 +1,95 @@
+name: reusable-gitops-dev-update
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: Service name for commit/PR title
+        required: true
+        type: string
+      values_file:
+        description: GitOps values file path to update image tag
+        required: true
+        type: string
+      image_tag:
+        description: Image tag written to values_file
+        required: true
+        type: string
+      skip_if_deploy_commit:
+        description: Skip when head commit starts with deploy(dev):
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      ci_bot_token:
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dev-gitops:
+    if: ${{ !inputs.skip_if_deploy_commit || !startsWith(github.event.head_commit.message, 'deploy(dev):') }}
+    runs-on: ubuntu-latest
+    env:
+      PR_BOT_TOKEN: ${{ secrets.ci_bot_token || secrets.GITHUB_TOKEN }}
+      SERVICE_NAME: ${{ inputs.service_name }}
+      VALUES_FILE: ${{ inputs.values_file }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update dev image tag
+        run: |
+          set -euo pipefail
+          sed -i.bak -E "s|^  tag: .*|  tag: ${IMAGE_TAG}|" "${VALUES_FILE}"
+          rm -f "${VALUES_FILE}.bak"
+
+      - name: Create GitOps PR for dev update
+        id: cpr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ env.PR_BOT_TOKEN }}
+          commit-message: "deploy(dev): ${{ env.SERVICE_NAME }} ${{ env.IMAGE_TAG }}"
+          branch: "bot/gitops-dev-${{ env.SERVICE_NAME }}-${{ github.run_id }}"
+          delete-branch: true
+          title: "deploy(dev): ${{ env.SERVICE_NAME }} ${{ env.IMAGE_TAG }}"
+          body: |
+            Automated dev GitOps update.
+            - service: ${{ env.SERVICE_NAME }}
+            - image_tag: `${{ env.IMAGE_TAG }}`
+            - source_run: `${{ github.run_id }}`
+          add-paths: |
+            ${{ env.VALUES_FILE }}
+
+      - name: Enable auto-merge with clean-status fallback
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ env.PR_BOT_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          set -euo pipefail
+          set +e
+          out="$(gh pr merge -R "${GITHUB_REPOSITORY}" --squash --auto "${PR_NUMBER}" 2>&1)"
+          code=$?
+          set -e
+          echo "${out}"
+          if [ "${code}" -eq 0 ]; then
+            exit 0
+          fi
+          if echo "${out}" | grep -qi "clean status"; then
+            echo "Detected clean-status race, trying direct squash merge fallback."
+            set +e
+            out2="$(gh pr merge -R "${GITHUB_REPOSITORY}" --squash "${PR_NUMBER}" 2>&1)"
+            code2=$?
+            set -e
+            echo "${out2}"
+            if [ "${code2}" -eq 0 ]; then
+              exit 0
+            fi
+            echo "Fallback merge not applied; leave PR open for normal merge conditions."
+            exit 0
+          fi
+          exit "${code}"

@@ -1,0 +1,64 @@
+name: reusable-dora-report
+
+on:
+  workflow_call:
+    inputs:
+      window_days:
+        description: Time window in days
+        required: false
+        type: string
+        default: "7"
+      artifact_name:
+        description: Artifact name prefix
+        required: false
+        type: string
+        default: dora-weekly-report
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      WINDOW_DAYS: ${{ inputs.window_days }}
+      ARTIFACT_NAME: ${{ inputs.artifact_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download DORA event artifacts
+        run: |
+          chmod +x ./scripts/download_dora_artifacts.sh
+          ./scripts/download_dora_artifacts.sh "${WINDOW_DAYS}" "dora/weekly-input"
+
+      - name: Generate weekly report
+        run: |
+          python3 ./scripts/generate_dora_weekly_report.py \
+            --events-dir dora/weekly-input \
+            --days "${WINDOW_DAYS}" \
+            --out-json dora/reports/weekly-report.json \
+            --out-md dora/reports/weekly-report.md
+
+      - name: Generate dashboard data (30d)
+        run: |
+          python3 ./scripts/generate_dora_dashboard_data.py \
+            --events-dir dora/weekly-input \
+            --days 30 \
+            --out-json dora/reports/dora-timeseries.json \
+            --out-csv dora/reports/dora-timeseries.csv
+
+      - name: Upload weekly report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}-${{ github.run_id }}
+          path: |
+            dora/reports/weekly-report.json
+            dora/reports/weekly-report.md
+            dora/reports/dora-timeseries.json
+            dora/reports/dora-timeseries.csv
+
+      - name: Append summary
+        run: cat dora/reports/weekly-report.md >> "$GITHUB_STEP_SUMMARY"

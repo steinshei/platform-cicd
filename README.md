@@ -25,3 +25,10 @@ uses: steinshei/platform-cicd/.github/workflows/reusable-ci.yml@v1
 - `reusable-android-package.yml`: build and upload APK/AAB artifacts.
 
 See `docs/android-integration-guide.md` for integration details.
+
+## Platform Reusable Workflows
+
+- `reusable-gitops-dev-update.yml`: update dev GitOps image tag and open/merge PR.
+- `reusable-build-multiarch-image.yml`: build and push multi-arch image to GHCR.
+- `reusable-dora-report.yml`: generate weekly DORA report and dashboard artifacts.
+- `reusable-dora-kpi-gate.yml`: evaluate DORA KPI gates and upload report artifacts.
