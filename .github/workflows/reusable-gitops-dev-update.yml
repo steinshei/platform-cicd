@@ -16,7 +16,7 @@ on:
         required: true
         type: string
       skip_if_deploy_commit:
-        description: Skip when head commit starts with deploy(dev):
+        description: "Skip when head commit starts with deploy(dev):"
         required: false
         type: boolean
         default: true
