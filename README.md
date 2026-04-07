@@ -16,3 +16,12 @@
 ```yaml
 uses: steinshei/platform-cicd/.github/workflows/reusable-ci.yml@v1
 ```
+
+
+## Android Reusable Workflows
+
+- `reusable-android-gate.yml`: compile + unit-test cloud gate.
+- `reusable-android-macrobenchmark-self-hosted.yml`: macrobenchmark on self-hosted runner.
+- `reusable-android-package.yml`: build and upload APK/AAB artifacts.
+
+See `docs/android-integration-guide.md` for integration details.

@@ -1,0 +1,69 @@
+name: reusable-android-package
+
+on:
+  workflow_call:
+    inputs:
+      project_dir:
+        required: true
+        type: string
+      java_version:
+        required: false
+        type: string
+        default: "17"
+      package_tasks:
+        required: false
+        type: string
+        default: ":app:assembleRelease :app:bundleRelease"
+      artifact_name:
+        required: false
+        type: string
+        default: android-release
+      retention_days:
+        required: false
+        type: number
+        default: 14
+      apk_glob:
+        required: false
+        type: string
+        default: app/build/outputs/apk/release/*.apk
+      aab_glob:
+        required: false
+        type: string
+        default: app/build/outputs/bundle/release/*.aab
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java_version }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Android package artifacts
+        working-directory: ${{ inputs.project_dir }}
+        env:
+          PACKAGE_TASKS: ${{ inputs.package_tasks }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew ${PACKAGE_TASKS} --no-daemon
+
+      - name: Upload Android package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}-${{ github.run_number }}
+          retention-days: ${{ inputs.retention_days }}
+          path: |
+            ${{ inputs.project_dir }}/${{ inputs.apk_glob }}
+            ${{ inputs.project_dir }}/${{ inputs.aab_glob }}

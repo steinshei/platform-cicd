@@ -1,0 +1,54 @@
+name: reusable-android-gate
+
+on:
+  workflow_call:
+    inputs:
+      project_dir:
+        required: true
+        type: string
+      java_version:
+        required: false
+        type: string
+        default: "17"
+      assemble_tasks:
+        required: false
+        type: string
+        default: ":app:assembleRelease"
+      unit_test_tasks:
+        required: false
+        type: string
+        default: ":app:testDebugUnitTest"
+      extra_tasks:
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  android-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java_version }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run Android compile and unit tests
+        working-directory: ${{ inputs.project_dir }}
+        env:
+          ASSEMBLE_TASKS: ${{ inputs.assemble_tasks }}
+          UNIT_TEST_TASKS: ${{ inputs.unit_test_tasks }}
+          EXTRA_TASKS: ${{ inputs.extra_tasks }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew ${ASSEMBLE_TASKS} ${UNIT_TEST_TASKS} ${EXTRA_TASKS} --no-daemon
